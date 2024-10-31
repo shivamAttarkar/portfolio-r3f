@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: unset;
+  background-color: black;
+}
+
+.overlay {
+  position: absolute;
+  bottom: 120px;
+  font-size: larger;
+  display: flex;
+  align-items: center;
+  width: 100vw;
+  flex-direction: column;
+  justify-items: end;
+  z-index: 10;
+  /* Example styling */
+}
