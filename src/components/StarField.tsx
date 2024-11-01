@@ -4,8 +4,23 @@ import { Color, AdditiveBlending, ShaderMaterial, Vector3, Spherical } from 'thr
 import { version } from '@react-three/drei/helpers/constants.js';
 import * as THREE from 'three';
 
+interface StarfieldMaterialArgs {
+    radius?: number,
+    direction?: number[],
+    movementSpeed?: number
+}
+
+interface StarFieldProps extends StarfieldMaterialArgs {
+    depth?: number,
+    count?: number,
+    saturation?: number,
+    factor?: number,
+    fade?: boolean,
+    speed?: number,
+}
+
 class StarfieldMaterial extends ShaderMaterial {
-    constructor(radius: number) {
+    constructor(args: StarfieldMaterialArgs) {
         super({
             uniforms: {
                 time: {
@@ -14,31 +29,38 @@ class StarfieldMaterial extends ShaderMaterial {
                 fade: {
                     value: 1.0
                 },
-                radius: { value: radius },
+                radius: {
+                    value: args.radius
+                },
+                direction: {
+                    value: new Float32Array(args.direction!)
+                },
+                movementSpeed: {
+                    value: args.movementSpeed
+                }
             },
             vertexShader: /* glsl */`
-  uniform float time;
-  uniform float radius; // Add uniform for the radius
-  attribute float size;
-  varying vec3 vColor;
+      uniform float time;
+      uniform vec3 direction;
+      uniform float radius;
+      uniform float movementSpeed;
+      attribute float size;
+      varying vec3 vColor;
+      void main() {
+        vColor = color;
 
-  void main() {
-    vColor = color;
+        float xOffset = time * direction.x * movementSpeed;
+        float yOffset = time * direction.y * movementSpeed;
+        float zOffset = time * direction.z * movementSpeed;
 
-    // Update x position with wrapping
-    float newX = position.x - time*4.0; 
+        float newX = mod(position.x + xOffset, radius*2.0) - radius*1.2;
+        float newY = mod(position.y + yOffset, radius*2.0) - radius*1.2;
+        float newZ = mod(position.z + zOffset, radius*2.0) - radius*1.2;
 
-    // Wrap around logic
-    if (newX > radius) {
-      newX -= 2.0 * radius; // Move to the opposite side
-    } else if (newX < -radius) {
-      newX += 2.0 * radius; // Move to the opposite side
-    }
-
-    vec4 mvPosition = modelViewMatrix * vec4(newX, position.y, position.z, 1.0);
-    gl_PointSize = size * (30.0 / -mvPosition.z) * (3.0 + sin(time + 100.0));
-    gl_Position = projectionMatrix * mvPosition;
-  }`,
+        vec4 mvPosition = modelViewMatrix * vec4(newX, newY, newZ, 0.5);
+        gl_PointSize = size * (30.0 / -mvPosition.z) * (3.0 + sin(time + 100.0));
+        gl_Position = projectionMatrix * mvPosition;
+      }`,
             fragmentShader: /* glsl */`
       uniform sampler2D pointTexture;
       uniform float fade;
@@ -60,14 +82,16 @@ class StarfieldMaterial extends ShaderMaterial {
 const genStar = (r: number) => {
     return new Vector3().setFromSpherical(new Spherical(r, Math.acos(1 - Math.random() * 2), Math.random() * 2 * Math.PI));
 };
-const StarField = /* @__PURE__ */React.forwardRef<THREE.Points, any>(({
+const StarField = /* @__PURE__ */React.forwardRef<THREE.Points, StarFieldProps>(({
     radius = 100,
     depth = 50,
     count = 5000,
     saturation = 0,
     factor = 4,
     fade = false,
-    speed = 1
+    speed = 1,
+    direction = [0, 0, 0],
+    movementSpeed = 0
 }, ref) => {
     const material = React.useRef<ShaderMaterial>();
     const [position, color, size] = React.useMemo(() => {
@@ -87,12 +111,8 @@ const StarField = /* @__PURE__ */React.forwardRef<THREE.Points, any>(({
         }
         return [new Float32Array(positions), new Float32Array(colors), new Float32Array(sizes)];
     }, [count, depth, factor, radius, saturation]);
-    useFrame(state => {
-        if (material.current) {
-            material.current.uniforms.time.value = state.clock.getElapsedTime() * speed;
-        }
-    });
-    const [starfieldMaterial] = React.useState(() => new StarfieldMaterial(radius));
+    useFrame(state => material.current && (material.current.uniforms.time.value = state.clock.getElapsedTime() * speed));
+    const [starfieldMaterial] = React.useState(() => new StarfieldMaterial({ radius: radius, direction: direction, movementSpeed: movementSpeed }));
     return /*#__PURE__*/React.createElement("points", {
         ref: ref
     }, /*#__PURE__*/React.createElement("bufferGeometry", null, /*#__PURE__*/React.createElement("bufferAttribute", {
